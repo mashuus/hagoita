@@ -1,4 +1,4 @@
-package com.example.hagoitaandroid
+package com.example.hagoitaandroid.ui
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
