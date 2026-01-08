@@ -2,19 +2,20 @@
 package com.example.hagoitaandroid.ui
 
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
@@ -23,53 +24,71 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.hagoitaandroid.R
 import com.example.hagoitaandroid.ui.theme.HagoitaandroidTheme
 
-// --- ▼▼▼ GameStartScreen を修正 ▼▼▼ ---
 @Composable
 fun GameStartScreen(
-    // 引数を onScreenClick から onStartClick に変更して分かりやすくする
     onStartClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // Column を使って、画像とボタンを縦に並べる
-    Column(
-        modifier = modifier.fillMaxSize().padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally, // 水平方向中央揃え
-        verticalArrangement = Arrangement.SpaceAround // 垂直方向に均等配置
+    // BoxWithConstraints で画面全体を囲む
+    BoxWithConstraints(
+        modifier = modifier
+            .fillMaxSize()
+            .background(Color.White)
     ) {
-        // 上のロゴ（仮）
-        Text("Smash Phone")
+        // this スコープ内で maxWidth や maxHeight が使えるようになる
+        // (画面の最大幅と最大高さが dp 単位で取得できる)
 
-        // 羽子板の画像
+        // figure1.png を配置
         Image(
-            painter = painterResource(id = R.drawable.frame1),
-            contentDescription = "スタート画面の羽子板",
-            modifier = Modifier.weight(1f), // ボタン以外の残りのスペースを埋める
-            contentScale = ContentScale.Fit
+            painter = painterResource(id = R.drawable.figure1),
+            contentDescription = "Figure 1",
+            modifier = Modifier
+                // 位置：(maxWidth * 0.16, maxHeight * 0.10)
+                .offset(x = maxWidth * 0.16f, y = maxHeight * 0.10f)
+                // 大きさ：幅を画面の68%、高さを画面の12%
+                .width(maxWidth * 0.68f)
+                .height(maxHeight * 0.12f),
+            contentScale = ContentScale.FillBounds // 指定サイズに合わせる
         )
 
-        Spacer(modifier = Modifier.height(24.dp)) // 画像とボタンの間にスペースを空ける
+        // figure2.png を配置
+        Image(
+            painter = painterResource(id = R.drawable.figure2),
+            contentDescription = "Figure 2",
+            modifier = Modifier
+                // 位置：(0, maxHeight * 0.23)
+                .offset(x = 0.dp, y = maxHeight * 0.23f)
+                // 大きさ：幅を画面いっぱい、高さを画面の55%
+                .width(maxWidth)
+                .height(maxHeight * 0.55f),
+            contentScale = ContentScale.FillBounds
+        )
 
-        // Game Start ボタン
+        // Game Start ボタンを画面下部に配置
         Button(
-            onClick = onStartClick, // ボタンがクリックされたら、渡された処理を実行
-            modifier = Modifier.fillMaxWidth()
+            onClick = onStartClick,
+            modifier = Modifier
+                .align(Alignment.BottomCenter) // 親(Box)の真下に配置
+                .padding(bottom = 32.dp)       // 画面下から少し浮かせる
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)   // 左右に余白を持たせる
         ) {
             Text("Game Start")
         }
     }
 }
 
-// --- ▼▼▼ GamePlayScreen を修正 ▼▼▼ ---
+
+// --- GamePlayScreen は変更なし ---
 @Composable
 fun GamePlayScreen(
     modifier: Modifier = Modifier,
     gameViewModel: GameViewModel = viewModel()
 ) {
-    Box(
+    androidx.compose.foundation.layout.Box(
         modifier = modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
-        // ゲームプレイ画面では frame2.png を表示する
         Image(
             painter = painterResource(id = R.drawable.frame2),
             contentDescription = "プレイ中の羽子板",
@@ -79,9 +98,8 @@ fun GamePlayScreen(
     }
 }
 
-
 // --- プレビュー用のコード ---
-@Preview(showBackground = true)
+@Preview(showBackground = true, widthDp = 402, heightDp = 874)
 @Composable
 private fun GameStartScreenPreview() {
     HagoitaandroidTheme {
