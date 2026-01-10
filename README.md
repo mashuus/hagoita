@@ -22,6 +22,7 @@
 - app/src/main/java/com/example/hagoita/
   - ui/
     - MainActivity.kt 
+    - HomeScreen.kt (UI: スタート画面)
     - GameScreen.kt (UI: スタート / リザルト)
     - GameViewModel.kt (ゲームロジック・状態)
     - theme/
