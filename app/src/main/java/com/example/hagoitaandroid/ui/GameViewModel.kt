@@ -40,6 +40,14 @@ class GameViewModel : ViewModel(), SensorEventListener {
     private val _uiState = MutableStateFlow(GameUiState())
     val uiState: StateFlow<GameUiState> = _uiState.asStateFlow()
 
+    // Botの返球成功率 (デフォルトは0.7f)
+    private var botAccuracy: Float = 0.7f
+
+    // 難易度を設定する関数
+    fun setDifficulty(accuracy: Float) {
+        this.botAccuracy = accuracy
+    }
+
     private var gameJob: Job? = null
     private var isPlayerTurn = true
 
@@ -110,39 +118,24 @@ class GameViewModel : ViewModel(), SensorEventListener {
 
     // ゲームを完全にリセット（ホームに戻る時に呼ぶ）
     fun resetGame() {
-        // 1. ラリーの計算（コルーチン）を即座にキャンセルする
+        // ラリーの計算（コルーチン）を即座にキャンセルする
         gameJob?.cancel()
         gameJob = null
 
-        // 2. 移動音 (flowPlayer) を確実に停止する
         try {
-            flowPlayer?.let { player ->
-                if (player.isPlaying) {
-                    player.pause()
-                }
-                player.seekTo(0)
-                player.setVolume(0f, 0f)
-            }
-        } catch (e: Exception) {
-            android.util.Log.e("GameViewModel", "Error stopping flowPlayer: ${e.message}")
-        }
+            hitPlayer?.pause()
+            hitPlayer?.seekTo(0)
+        } catch (e: Exception) {}
 
-        // 3. 打撃音 (hitPlayer) も停止する
-        try {
-            hitPlayer?.let { player ->
-                if (player.isPlaying) {
-                    player.pause()
-                }
-                player.seekTo(0)
-                player.setVolume(0f, 0f)
-            }
-        } catch (e: Exception) {
-            android.util.Log.e("GameViewModel", "Error stopping hitPlayer: ${e.message}")
+        // フラグを折る
+        isPlayerTurn = false // ホーム画面ではターンという概念を消す
+        _uiState.update {
+            it.copy(
+                isRallyActive = false,
+                targetPos = null,
+                ballPos = Position(0.5f, 0.75f)
+            )
         }
-
-        // 4. フラグを折る
-        _uiState.update { it.copy(isRallyActive = false) }
-        isPlayerTurn = true
     }
 
     override fun onCleared() {
@@ -168,14 +161,25 @@ class GameViewModel : ViewModel(), SensorEventListener {
 
     // プレイヤーのアクション（ボタンまたはセンサーから呼ばれる）
     fun onPlayerAction() {
-        if (!isPlayerTurn || _uiState.value.isGameOver) return
+        // 基本的なガード：ゲームオーバー、または自分のターンでないなら無視
+        if (_uiState.value.isGameOver || !isPlayerTurn) return
 
+        // targetPos が null、かつラリーもアクティブでない場合は「ホーム画面」とみなして即座に終了
+        val currentState = _uiState.value
+        if (currentState.targetPos == null && !currentState.isRallyActive) {
+            stopFlowSound()
+            return
+        }
+
+        // 連打防止（0.5秒以内の連続振りを無視）
         val currentTime = System.currentTimeMillis()
         if (currentTime - lastShakeTime < 500) return
         lastShakeTime = currentTime
 
+        // ここで音を鳴らす
         playHitSound()
 
+        // 状態更新
         isPlayerTurn = false
         _uiState.update { it.copy(isRallyActive = true) }
         startBallMovement(toEnemy = true)
@@ -237,7 +241,7 @@ class GameViewModel : ViewModel(), SensorEventListener {
 
                 if (toEnemy) {
                     delay(300) // 打ち返しまでの「間」
-                    if (Random.nextFloat() < 0.90f) {
+                    if (Random.nextFloat() < botAccuracy) {
                         playHitSound() // 打撃音
                         startBallMovement(toEnemy = false)
                     } else {
