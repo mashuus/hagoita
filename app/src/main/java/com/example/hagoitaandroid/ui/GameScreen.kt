@@ -48,10 +48,10 @@ fun GamePlayScreen(
     val uiState by gameViewModel.uiState.collectAsState()
 
     // 乱数座標を保持するState
-    var targetX by remember { mutableFloatStateOf(Random.nextFloat() * 0.6f + 0.2f) }
-    var targetY by remember { mutableFloatStateOf(Random.nextFloat() * 0.4f + 0.3f) }
-    var ballX by remember { mutableFloatStateOf(Random.nextFloat() * 0.6f + 0.2f) }
-    var ballY by remember { mutableFloatStateOf(Random.nextFloat() * 0.4f + 0.3f) }
+    var targetX by remember { mutableFloatStateOf(Random.nextFloat() * 0.8f + 0.1f) }
+    var targetY by remember { mutableFloatStateOf(Random.nextFloat() * 0.8f + 0.1f) }
+    var ballX by remember { mutableFloatStateOf(Random.nextFloat() * 0.8f + 0.1f) }
+    var ballY by remember { mutableFloatStateOf(Random.nextFloat() * 0.8f + 0.1f) }
 
     Box(
         modifier = modifier
@@ -120,13 +120,13 @@ fun GamePlayScreen(
             modifier = Modifier.align(Alignment.BottomCenter),
             onPlayerScoreChange = {
                 gameViewModel.updatePlayerScore(it)
-                targetX = Random.nextFloat() * 0.6f + 0.2f
-                targetY = Random.nextFloat() * 0.4f + 0.3f
+                targetX = Random.nextFloat() * 0.8f + 0.1f
+                targetY = Random.nextFloat() * 0.8f + 0.1f
             },
             onOpponentScoreChange = {
                 gameViewModel.updateOpponentScore(it)
-                ballX = Random.nextFloat() * 0.6f + 0.2f
-                ballY = Random.nextFloat() * 0.4f + 0.3f
+                ballX = Random.nextFloat() * 0.8f + 0.1f
+                ballY = Random.nextFloat() * 0.8f + 0.1f
             }
         )
     }
