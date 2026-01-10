@@ -7,19 +7,18 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -30,9 +29,15 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.hagoitaandroid.R
 import com.example.hagoitaandroid.ui.theme.HagoitaandroidTheme
-import kotlin.random.Random
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
-// 和風カラー定義
+// カラー定義
 val ColorWashi = Color(0xFFFBFaf5)
 val ColorVermilion = Color(0xFFD3381C)
 val ColorGold = Color(0xFFC5A059)
@@ -41,20 +46,61 @@ val ColorTatami = Color(0xFFE0DCB8)
 
 @Composable
 fun GamePlayScreen(
-    modifier: Modifier = Modifier,
+    onNavigateBack: () -> Unit,
     gameViewModel: GameViewModel = viewModel()
 ) {
-    // インポートエラーを防ぐため collectAsState を明示的に使用
     val uiState by gameViewModel.uiState.collectAsState()
 
-    // 乱数座標を保持するState
-    var targetX by remember { mutableFloatStateOf(Random.nextFloat() * 0.8f + 0.1f) }
-    var targetY by remember { mutableFloatStateOf(Random.nextFloat() * 0.8f + 0.1f) }
-    var ballX by remember { mutableFloatStateOf(Random.nextFloat() * 0.8f + 0.1f) }
-    var ballY by remember { mutableFloatStateOf(Random.nextFloat() * 0.8f + 0.1f) }
+    // --- 【変更点】エレガントな演出用の状態管理 ---
+    var showScoreEffect by remember { mutableStateOf(false) }
+    var effectText by remember { mutableStateOf("") }     // 表示する文字
+    var effectColor by remember { mutableStateOf(ColorVermilion) } // 文字の色
 
+    // スコアの変更を検知するために、直前のスコアを覚えておく
+    var prevPlayerScore by remember { mutableIntStateOf(uiState.playerScore) }
+    var prevOpponentScore by remember { mutableIntStateOf(uiState.opponentScore) }
+
+    // 得点/失点時にエフェクトを起動
+    LaunchedEffect(uiState.playerScore, uiState.opponentScore) {
+        // ゲームオーバー時はダイアログが出るので、それ以外の時に判定
+        if (!uiState.isGameOver) {
+            if (uiState.playerScore > prevPlayerScore) {
+                // 自分のスコアが増えた場合
+                effectText = "一本！"
+                effectColor = ColorVermilion // 情熱の赤
+                showScoreEffect = true
+            } else if (uiState.opponentScore > prevOpponentScore) {
+                // 相手のスコアが増えた場合（＝自分の失点）
+                effectText = "失点..."
+                effectColor = Color.Gray      // 哀愁のグレー
+                showScoreEffect = true
+            }
+
+            if (showScoreEffect) {
+                kotlinx.coroutines.delay(1200) // 1.2秒間表示
+                showScoreEffect = false
+            }
+        }
+        // 次の判定のためにスコアを更新
+        prevPlayerScore = uiState.playerScore
+        prevOpponentScore = uiState.opponentScore
+    }
+
+    if (uiState.isGameOver) {
+        // 勝利ダイアログ
+        AlertDialog(
+            onDismissRequest = { },
+            title = { Text("試合終了") },
+            text = { Text(uiState.winnerLabel) },
+            confirmButton = {
+                Button(onClick = onNavigateBack) { Text("ホームへ戻る") }
+            }
+        )
+    }
+
+    // 背景レイアウト
     Box(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxSize()
             .background(
                 brush = Brush.verticalGradient(
@@ -71,70 +117,86 @@ fun GamePlayScreen(
         ) {
             OpponentScoreArea(score = uiState.opponentScore)
 
-            // フィールドコンテナ
             GameFieldContainer {
                 BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                     val w = maxWidth
                     val h = maxHeight
 
-                    // 1. 背景フィールド画像
+                    // 1. 背景フィールド画像と中央線
                     Image(
                         painter = painterResource(id = R.drawable.field),
-                        contentDescription = "ゲームフィールド",
-                        modifier = Modifier.fillMaxSize(),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .drawBehind {
+                                val pathEffect = PathEffect.dashPathEffect(floatArrayOf(20f, 10f), 0f)
+                                drawLine(
+                                    color = Color.White.copy(alpha = 0.5f),
+                                    start = Offset(0f, size.height / 2),
+                                    end = Offset(size.width, size.height / 2),
+                                    strokeWidth = 3.dp.toPx(),
+                                    pathEffect = pathEffect
+                                )
+                            },
                         contentScale = ContentScale.FillBounds
                     )
 
-                    // 2. ターゲット
-                    TargetItem(x = targetX, y = targetY, containerWidth = w, containerHeight = h)
+                    // キャラクター・ボール等の描画
+                    uiState.targetPos?.let { pos ->
+                        TargetItem(x = pos.x, y = pos.y, containerWidth = w, containerHeight = h)
+                    }
+                    BallItem(x = uiState.ballPos.x, y = uiState.ballPos.y, containerWidth = w, containerHeight = h)
+                    CharacterPawn(uiState.enemyPos.x, uiState.enemyPos.y, R.drawable.ic_enemy_char, w, h, "敵")
+                    CharacterPawn(uiState.playerPos.x, uiState.playerPos.y, R.drawable.ic_player_char, w, h, "自")
 
-                    // 3. ボール
-                    BallItem(x = ballX, y = ballY, containerWidth = w, containerHeight = h)
-
-                    // 4. 敵
-                    CharacterPawn(
-                        x = 0.5f,
-                        y = 0.25f,
-                        imageResId = R.drawable.ic_enemy_char,
-                        containerWidth = w,
-                        containerHeight = h,
-                        label = "敵"
-                    )
-
-                    // 5. 自分
-                    CharacterPawn(
-                        x = 0.5f,
-                        y = 0.75f,
-                        imageResId = R.drawable.ic_player_char,
-                        containerWidth = w,
-                        containerHeight = h,
-                        label = "自"
+                    // --- 【変更点】引数を追加したエレガントな演出 ---
+                    ScoreEffectOverlay(
+                        visible = showScoreEffect,
+                        text = effectText,
+                        color = effectColor
                     )
                 }
             }
 
             PlayerScoreArea(score = uiState.playerScore)
-        }
 
-        DebugControlPanel(
-            modifier = Modifier.align(Alignment.BottomCenter),
-            onPlayerScoreChange = {
-                gameViewModel.updatePlayerScore(it)
-                targetX = Random.nextFloat() * 0.8f + 0.1f
-                targetY = Random.nextFloat() * 0.8f + 0.1f
-            },
-            onOpponentScoreChange = {
-                gameViewModel.updateOpponentScore(it)
-                ballX = Random.nextFloat() * 0.8f + 0.1f
-                ballY = Random.nextFloat() * 0.8f + 0.1f
+            Button(
+                onClick = { gameViewModel.onPlayerAction() },
+                modifier = Modifier.padding(bottom = 16.dp)
+            ) {
+                Text("スイング！", fontWeight = FontWeight.Bold)
             }
-        )
+        }
+    }
+}
+
+
+@Composable
+fun BoxScope.ScoreEffectOverlay(visible: Boolean, text: String, color: Color) {
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(animationSpec = tween(300)) + scaleIn(initialScale = 0.8f),
+        exit = fadeOut(animationSpec = tween(500)),
+        modifier = Modifier.align(Alignment.Center)
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = text, // 動的にテキストを切り替え
+                style = MaterialTheme.typography.displayMedium,
+                color = color, // 動的に色を切り替え
+                fontWeight = FontWeight.Black,
+                modifier = Modifier
+                    .shadow(8.dp, RoundedCornerShape(8.dp))
+                    .background(Color.White.copy(alpha = 0.9f), RoundedCornerShape(8.dp))
+                    .padding(horizontal = 24.dp, vertical = 8.dp)
+            )
+        }
     }
 }
 
 @Composable
 fun BallItem(x: Float, y: Float, containerWidth: Dp, containerHeight: Dp) {
-    val ballSize = 60.dp
+    val ballSize = 30.dp
     Box(
         modifier = Modifier
             .size(ballSize)
@@ -175,38 +237,22 @@ fun TargetItem(x: Float, y: Float, containerWidth: Dp, containerHeight: Dp) {
 }
 
 @Composable
-fun CharacterPawn(
-    x: Float, y: Float,
-    imageResId: Int,
-    containerWidth: Dp,
-    containerHeight: Dp,
-    label: String
-) {
+fun CharacterPawn(x: Float, y: Float, imageResId: Int, containerWidth: Dp, containerHeight: Dp, label: String) {
     val size = 50.dp
     Box(
         modifier = Modifier
             .size(size)
-            .offset(
-                x = (containerWidth * x) - (size / 2),
-                y = (containerHeight * y) - (size / 2)
-            ),
+            .offset(x = (containerWidth * x) - (size / 2), y = (containerHeight * y) - (size / 2)),
         contentAlignment = Alignment.Center
     ) {
         Image(
             painter = painterResource(id = imageResId),
             contentDescription = label,
-            modifier = Modifier
-                .fillMaxSize()
-                .shadow(4.dp, CircleShape)
-                .clip(CircleShape)
-                .background(Color.White, CircleShape),
+            modifier = Modifier.fillMaxSize().shadow(4.dp, CircleShape).clip(CircleShape).background(Color.White, CircleShape),
             contentScale = ContentScale.Fit
         )
         Box(
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .background(ColorBlackInk, RoundedCornerShape(4.dp))
-                .padding(horizontal = 4.dp, vertical = 1.dp)
+            modifier = Modifier.align(Alignment.BottomEnd).background(ColorBlackInk, RoundedCornerShape(4.dp)).padding(horizontal = 4.dp, vertical = 1.dp)
         ) {
             Text(text = label, color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold)
         }
@@ -233,12 +279,8 @@ fun PlayerScoreArea(score: Int) {
 @Composable
 fun ScoreBoard(score: Int, containerColor: Color, contentColor: Color) {
     Surface(
-        modifier = Modifier
-            .size(80.dp)
-            .shadow(8.dp, CircleShape),
-        shape = CircleShape,
-        color = containerColor,
-        border = androidx.compose.foundation.BorderStroke(2.dp, ColorGold)
+        modifier = Modifier.size(80.dp).shadow(8.dp, CircleShape),
+        shape = CircleShape, color = containerColor, border = androidx.compose.foundation.BorderStroke(2.dp, ColorGold)
     ) {
         Box(contentAlignment = Alignment.Center) {
             Text(text = score.toString(), fontSize = 36.sp, fontWeight = FontWeight.Bold, color = contentColor)
@@ -247,12 +289,10 @@ fun ScoreBoard(score: Int, containerColor: Color, contentColor: Color) {
 }
 
 @Composable
-fun ColumnScope.GameFieldContainer(
-    content: @Composable () -> Unit
-) {
+fun ColumnScope.GameFieldContainer(content: @Composable () -> Unit) {
     Box(
         modifier = Modifier
-            .weight(1f) // ここが正しく動作するようになります
+            .weight(1f)
             .padding(vertical = 16.dp)
             .fillMaxWidth(0.9f)
             .shadow(12.dp, RoundedCornerShape(8.dp))
@@ -266,53 +306,10 @@ fun ColumnScope.GameFieldContainer(
     }
 }
 
-@Composable
-fun DebugControlPanel(
-    modifier: Modifier = Modifier,
-    onPlayerScoreChange: (Int) -> Unit,
-    onOpponentScoreChange: (Int) -> Unit
-) {
-    Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(bottom = 30.dp, start = 16.dp, end = 16.dp),
-        color = Color.White.copy(alpha = 0.8f),
-        shape = RoundedCornerShape(16.dp),
-        shadowElevation = 4.dp
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceAround,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            DebugCounter(label = "相手", onIncrement = { onOpponentScoreChange(1) }, onDecrement = { onOpponentScoreChange(-1) })
-            HorizontalDivider(modifier = Modifier
-                .height(40.dp)
-                .width(1.dp))
-            DebugCounter(label = "自分", onIncrement = { onPlayerScoreChange(1) }, onDecrement = { onPlayerScoreChange(-1) })
-        }
-    }
-}
-
-@Composable
-fun DebugCounter(
-    label: String,
-    onIncrement: () -> Unit,
-    onDecrement: () -> Unit
-) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(text = "$label (Debug)", style = MaterialTheme.typography.labelSmall, fontSize = 10.sp)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onDecrement) { Icon(Icons.Default.Remove, contentDescription = "減らす") }
-            IconButton(onClick = onIncrement) { Icon(Icons.Default.Add, contentDescription = "増やす") }
-        }
-    }
-}
-
 @Preview(showBackground = true, widthDp = 402, heightDp = 874)
 @Composable
 private fun GamePlayScreenPreview() {
     HagoitaandroidTheme {
-        GamePlayScreen()
+        GamePlayScreen(onNavigateBack = {})
     }
 }

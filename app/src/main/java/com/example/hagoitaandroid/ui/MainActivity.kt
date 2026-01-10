@@ -31,29 +31,39 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun HagoitaApp(modifier: Modifier = Modifier) {
-    // NavController: 画面遷移を命令するコントローラー
+    // NavController: 画面遷移を管理するコントローラー
     val navController = rememberNavController()
 
     // ViewModelのインスタンスをここで一度だけ作成し、各画面で共有する
     val gameViewModel: GameViewModel = viewModel()
 
-    // NavHost: 現在表示すべき画面を描画する場所
+    // NavHost: 画面の定義とその切り替えルールを記述する場所
     NavHost(
         navController = navController,
         startDestination = "start",
         modifier = modifier
     ) {
+        // スタート（ホーム）画面の定義
         composable("start") {
             HomeScreen(
                 onStartClick = {
+                    // ゲームの状態をリセットして開始する
+                    gameViewModel.startGame()
+                    // "play" 画面へ移動する
                     navController.navigate("play")
                 }
             )
         }
 
-
+        // ゲームプレイ画面の定義
         composable("play") {
-            GamePlayScreen(gameViewModel = gameViewModel)
+            GamePlayScreen(
+                onNavigateBack = {
+                    // 勝利/敗北ダイアログで「ホームへ戻る」が押された時、"start" 画面に戻る
+                    navController.popBackStack("start", inclusive = false)
+                },
+                gameViewModel = gameViewModel
+            )
         }
     }
 }
