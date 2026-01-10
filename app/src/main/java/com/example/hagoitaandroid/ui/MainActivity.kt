@@ -76,6 +76,7 @@ fun HagoitaApp(
                 onDispose {}
             }
             HomeScreen(
+                gameViewModel = gameViewModel,
                 onStartClick = {
                     gameViewModel.startGame()
                     navController.navigate("play")
