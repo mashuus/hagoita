@@ -1,5 +1,9 @@
 package com.example.hagoitaandroid.ui
 
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Job
@@ -9,12 +13,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlin.math.sqrt
 import kotlin.random.Random
 
 // 座標管理用
 data class Position(val x: Float, val y: Float)
 
-// UIの状態（画面に表示するデータ）
+// UIの状態
 data class GameUiState(
     val playerScore: Int = 0,
     val opponentScore: Int = 0,
@@ -23,69 +28,91 @@ data class GameUiState(
     val enemyPos: Position = Position(0.5f, 0.25f),
     val targetPos: Position? = null,
     val isGameOver: Boolean = false,
-    val winnerLabel: String = ""
+    val winnerLabel: String = "",
+    val isRallyActive: Boolean = false
 )
 
-class GameViewModel : ViewModel() {
+class GameViewModel : ViewModel(), SensorEventListener {
     private val winScore = 7
     private val _uiState = MutableStateFlow(GameUiState())
     val uiState: StateFlow<GameUiState> = _uiState.asStateFlow()
 
     private var gameJob: Job? = null
-    private var isPlayerTurn = true // true: プレイヤーの番, false: Botの番
+    private var isPlayerTurn = true
 
-    // ゲーム開始（MainActivityのonClickから呼ばれる）
+    // --- センサー用設定 ---
+    private var sensorManager: SensorManager? = null
+    private val SHAKE_THRESHOLD = 15.0f // スイング判定の閾値（適宜調整）
+    private var lastShakeTime: Long = 0
+
+    fun initSensor(manager: SensorManager) {
+        sensorManager = manager
+        val accelerometer = manager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+        manager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_GAME)
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        sensorManager?.unregisterListener(this)
+    }
+
+    // ゲーム開始
     fun startGame() {
         gameJob?.cancel()
         _uiState.value = GameUiState()
         isPlayerTurn = true
-        spawnTarget(isPlayerSide = true) // 自分の前にターゲットを出す
+        spawnTarget(isPlayerSide = true)
     }
 
-    // プレイヤーがスイング（振る）した時の処理
+    // プレイヤーのアクション（ボタンまたはセンサーから呼ばれる）
     fun onPlayerAction() {
         if (!isPlayerTurn || _uiState.value.isGameOver) return
 
-        // プレイヤーが打ったので次はBotの番
+        val currentTime = System.currentTimeMillis()
+        if (currentTime - lastShakeTime < 500) return // 連打防止
+        lastShakeTime = currentTime
+
         isPlayerTurn = false
+        startBallMovement(toEnemy = true)
+
+        // プレイヤーが打った瞬間にラリー開始フラグを立てる
+        _uiState.update { it.copy(isRallyActive = true) }
         startBallMovement(toEnemy = true)
     }
 
-    // ターゲットをランダムに配置
     private fun spawnTarget(isPlayerSide: Boolean) {
         val nextY = if (isPlayerSide) {
-            Random.nextFloat() * 0.15f + 0.7f // 下側（自分）
+            Random.nextFloat() * 0.15f + 0.7f
         } else {
-            Random.nextFloat() * 0.15f + 0.15f // 上側（敵）
+            Random.nextFloat() * 0.15f + 0.15f
         }
         val nextX = Random.nextFloat() * 0.6f + 0.2f
         _uiState.update { it.copy(targetPos = Position(nextX, nextY)) }
     }
 
-    // ボールの移動アニメーション
+    // ボールの移動アニメーション（2秒かけて到達するように調整）
     private fun startBallMovement(toEnemy: Boolean) {
         gameJob?.cancel()
         gameJob = viewModelScope.launch {
-            // 1. 次の着弾地点（ターゲット）を決定
             spawnTarget(isPlayerSide = !toEnemy)
             val target = _uiState.value.targetPos ?: return@launch
 
-            // 2. ★重要★ 「現在の座標」を移動の開始地点にする
             val startBallPos = _uiState.value.ballPos
             val startPlayerPos = _uiState.value.playerPos
             val startEnemyPos = _uiState.value.enemyPos
 
-            val steps = 25
+            // 2000ms (2秒) / 20ms間隔 = 100ステップ
+            val totalDuration = 2000L
+            val frameDelay = 20L
+            val steps = (totalDuration / frameDelay).toInt()
+
             for (i in 1..steps) {
-                delay(25)
+                delay(frameDelay)
                 val progress = i.toFloat() / steps
 
-                // ボールの移動（現在地 -> ターゲット）
                 val currentBallX = startBallPos.x + (target.x - startBallPos.x) * progress
                 val currentBallY = startBallPos.y + (target.y - startBallPos.y) * progress
 
-                // キャラクターの移動（現在地 -> ターゲット）
-                // 敵へ向かうときは敵を、自分へ戻るときは自分を動かす
                 val currentEnemyX = if (toEnemy) startEnemyPos.x + (target.x - startEnemyPos.x) * progress else startEnemyPos.x
                 val currentEnemyY = if (toEnemy) startEnemyPos.y + (target.y - startEnemyPos.y) * progress else startEnemyPos.y
 
@@ -101,23 +128,22 @@ class GameViewModel : ViewModel() {
                 }
             }
 
-            // 3. 到着後の判定（変更なし）
             if (toEnemy) {
-                delay(200)
+                delay(300) // Botの反応待ち
                 if (Random.nextFloat() < 0.90f) {
-                    startBallMovement(toEnemy = false) // 相手が打ち返す
+                    startBallMovement(toEnemy = false)
                 } else {
-                    processScore(isPlayerWin = true) // 相手のミス
+                    processScore(isPlayerWin = true)
                 }
             } else {
                 isPlayerTurn = true
-                delay(400) // プレイヤーが振るのを待つ
-                if (isPlayerTurn) processScore(isPlayerWin = false) // 振らなかったらミス
+                // プレイヤーの打ち返し待ち時間（1秒ほど猶予を持たせる）
+                delay(1000)
+                if (isPlayerTurn) processScore(isPlayerWin = false)
             }
         }
     }
 
-    // 得点処理
     private fun processScore(isPlayerWin: Boolean) {
         _uiState.update {
             val newPlayerScore = if (isPlayerWin) it.playerScore + 1 else it.playerScore
@@ -129,8 +155,9 @@ class GameViewModel : ViewModel() {
                 opponentScore = newOpponentScore,
                 isGameOver = gameOver,
                 winnerLabel = if (newPlayerScore >= winScore) "あなたの勝ち！" else "相手の勝ち...",
-                ballPos = Position(0.5f, 0.75f), // ボールを戻す
-                targetPos = null
+                ballPos = Position(0.5f, 0.75f),
+                targetPos = null,
+                isRallyActive = false
             )
         }
 
@@ -140,7 +167,25 @@ class GameViewModel : ViewModel() {
         }
     }
 
-    // デバッグ用の得点操作（既存の関数）
+    // --- センサーイベントの処理 ---
+    override fun onSensorChanged(event: SensorEvent?) {
+        if (event?.sensor?.type == Sensor.TYPE_ACCELEROMETER) {
+            val x = event.values[0]
+            val y = event.values[1]
+            val z = event.values[2]
+
+            // 加速度の大きさを計算
+            val acceleration = sqrt(x * x + y * y + z * z)
+
+            // 閾値を超えたら「振った」とみなす
+            if (acceleration > SHAKE_THRESHOLD) {
+                onPlayerAction()
+            }
+        }
+    }
+
+    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+
     fun updatePlayerScore(delta: Int) {
         _uiState.update { it.copy(playerScore = (it.playerScore + delta).coerceAtLeast(0)) }
     }

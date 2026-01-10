@@ -51,7 +51,6 @@ fun GamePlayScreen(
 ) {
     val uiState by gameViewModel.uiState.collectAsState()
 
-    // --- 【変更点】エレガントな演出用の状態管理 ---
     var showScoreEffect by remember { mutableStateOf(false) }
     var effectText by remember { mutableStateOf("") }     // 表示する文字
     var effectColor by remember { mutableStateOf(ColorVermilion) } // 文字の色
@@ -142,14 +141,25 @@ fun GamePlayScreen(
                     )
 
                     // キャラクター・ボール等の描画
-                    uiState.targetPos?.let { pos ->
-                        TargetItem(x = pos.x, y = pos.y, containerWidth = w, containerHeight = h)
+                    // ターゲット: ラリー中のみ表示
+                    if (uiState.isRallyActive) {
+                        uiState.targetPos?.let { pos ->
+                            TargetItem(x = pos.x, y = pos.y, containerWidth = w, containerHeight = h)
+                        }
                     }
-                    BallItem(x = uiState.ballPos.x, y = uiState.ballPos.y, containerWidth = w, containerHeight = h)
+
+                    // ボール: ラリー中のみ表示
+                    if (uiState.isRallyActive) {
+                        BallItem(
+                            x = uiState.ballPos.x,
+                            y = uiState.ballPos.y,
+                            containerWidth = w,
+                            containerHeight = h
+                        )
+                    }
                     CharacterPawn(uiState.enemyPos.x, uiState.enemyPos.y, R.drawable.ic_enemy_char, w, h, "敵")
                     CharacterPawn(uiState.playerPos.x, uiState.playerPos.y, R.drawable.ic_player_char, w, h, "自")
 
-                    // --- 【変更点】引数を追加したエレガントな演出 ---
                     ScoreEffectOverlay(
                         visible = showScoreEffect,
                         text = effectText,

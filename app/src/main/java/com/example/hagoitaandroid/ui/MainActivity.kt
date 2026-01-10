@@ -1,5 +1,7 @@
 package com.example.hagoitaandroid.ui
 
+import android.content.Context
+import android.hardware.SensorManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -21,8 +23,19 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             HagoitaandroidTheme {
+                // ViewModelのインスタンスをここで作成（または取得）
+                val gameViewModel: GameViewModel = viewModel()
+
+                // ★ ここにセンサーの初期化処理を追加 ★
+                val sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
+                gameViewModel.initSensor(sensorManager)
+
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    HagoitaApp(modifier = Modifier.padding(innerPadding))
+                    // HagoitaAppにgameViewModelを渡す
+                    HagoitaApp(
+                        modifier = Modifier.padding(innerPadding),
+                        gameViewModel = gameViewModel
+                    )
                 }
             }
         }
@@ -30,36 +43,29 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun HagoitaApp(modifier: Modifier = Modifier) {
-    // NavController: 画面遷移を管理するコントローラー
+fun HagoitaApp(
+    modifier: Modifier = Modifier,
+    gameViewModel: GameViewModel = viewModel() // 引数で受け取るように変更
+) {
     val navController = rememberNavController()
 
-    // ViewModelのインスタンスをここで一度だけ作成し、各画面で共有する
-    val gameViewModel: GameViewModel = viewModel()
-
-    // NavHost: 画面の定義とその切り替えルールを記述する場所
     NavHost(
         navController = navController,
         startDestination = "start",
         modifier = modifier
     ) {
-        // スタート（ホーム）画面の定義
         composable("start") {
             HomeScreen(
                 onStartClick = {
-                    // ゲームの状態をリセットして開始する
                     gameViewModel.startGame()
-                    // "play" 画面へ移動する
                     navController.navigate("play")
                 }
             )
         }
 
-        // ゲームプレイ画面の定義
         composable("play") {
             GamePlayScreen(
                 onNavigateBack = {
-                    // 勝利/敗北ダイアログで「ホームへ戻る」が押された時、"start" 画面に戻る
                     navController.popBackStack("start", inclusive = false)
                 },
                 gameViewModel = gameViewModel
