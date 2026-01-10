@@ -24,9 +24,14 @@
     - MainActivity.kt 
     - GameScreen.kt (UI: スタート / リザルト)
     - GameViewModel.kt (ゲームロジック・状態)
+    - theme/
+     - Color.kt
+     - Theme.kt
+     - Type.kt
   - sensor/
     - ShakeDetector.kt (閾値判定)
   - audio/
     - SoundManager.kt (SoundPool 管理)
   - model/
     - GameResult.kt (スコア・タイミング情報)
+    - GameState.kt (ゲーム状態)
