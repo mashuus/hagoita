@@ -51,6 +51,12 @@ fun GamePlayScreen(
 ) {
     val uiState by gameViewModel.uiState.collectAsState()
 
+    DisposableEffect(Unit) {
+        onDispose {
+            gameViewModel.resetGame()
+        }
+    }
+
     var showScoreEffect by remember { mutableStateOf(false) }
     var effectText by remember { mutableStateOf("") }     // 表示する文字
     var effectColor by remember { mutableStateOf(ColorVermilion) } // 文字の色
@@ -170,12 +176,7 @@ fun GamePlayScreen(
 
             PlayerScoreArea(score = uiState.playerScore)
 
-            Button(
-                onClick = { gameViewModel.onPlayerAction() },
-                modifier = Modifier.padding(bottom = 16.dp)
-            ) {
-                Text("スイング！", fontWeight = FontWeight.Bold)
-            }
+            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 }
