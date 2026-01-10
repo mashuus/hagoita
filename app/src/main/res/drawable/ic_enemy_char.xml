@@ -1,0 +1,41 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="100dp"
+    android:height="100dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+
+    <!-- 角 (金/黄色) -->
+    <path
+        android:fillColor="#FDD835"
+        android:pathData="M30,30 L20,5 L40,25 z M70,30 L80,5 L60,25 z"/>
+
+    <!-- 顔のベース (少し暗めの赤) -->
+    <path
+        android:fillColor="#D32F2F"
+        android:pathData="M50,20 C30,20 15,35 15,60 C15,85 30,95 50,95 C70,95 85,85 85,60 C85,35 70,20 50,20 z"/>
+
+    <!-- 髪の毛 (黒/墨色) -->
+    <path
+        android:fillColor="#212121"
+        android:pathData="M15,60 C15,35 25,20 50,20 C75,20 85,35 85,60 C85,40 75,15 50,15 C25,15 15,40 15,60 z M15,50 C12,45 15,40 20,40 M85,50 C88,45 85,40 80,40"/>
+
+    <!-- 目 (吊り目・黄色) -->
+    <path
+        android:fillColor="#FFEB3B"
+        android:pathData="M25,45 L45,50 L25,55 z M75,45 L55,50 L75,55 z"/>
+
+    <!-- 瞳 (黒) 修正済み -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="M35,50m-2,0a2,2 0,1 1,4 0a2,2 0,1 1,-4 0 M65,50m-2,0a2,2 0,1 1,4 0a2,2 0,1 1,-4 0"/>
+
+    <!-- 口 (牙あり・黒) -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="M35,70 Q50,85 65,70 L60,70 L58,75 L55,70 L45,70 L42,75 L40,70 z"/>
+
+    <!-- 牙 (白) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M40,70 L42,76 L44,70 z M56,70 L58,76 L60,70 z"/>
+</vector>
