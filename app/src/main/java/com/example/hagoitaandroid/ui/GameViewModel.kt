@@ -1,11 +1,14 @@
 package com.example.hagoitaandroid.ui
 
+import android.content.Context
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.media.MediaPlayer
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.hagoitaandroid.R
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -45,20 +48,119 @@ class GameViewModel : ViewModel(), SensorEventListener {
     private val SHAKE_THRESHOLD = 15.0f // スイング判定の閾値（適宜調整）
     private var lastShakeTime: Long = 0
 
-    fun initSensor(manager: SensorManager) {
+    // --- 音声用プロパティ ---
+    private var hitPlayer: MediaPlayer? = null
+    private var flowPlayer: MediaPlayer? = null
+
+    // センサーと音声を初期化
+    fun initSystem(context: Context, manager: SensorManager) {
+        // センサー初期化
         sensorManager = manager
         val accelerometer = manager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
         manager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_GAME)
+
+        // 音声初期化 (重複作成防止のため、一旦releaseしてから作成)
+        hitPlayer?.release()
+        flowPlayer?.release()
+        hitPlayer = MediaPlayer.create(context, R.raw.hit)
+        flowPlayer = MediaPlayer.create(context, R.raw.flow).apply {
+            isLooping = true // 移動音はループ再生
+        }
+    }
+
+    // ヒット音再生
+    private fun playHitSound() {
+        hitPlayer?.apply {
+            try {
+                if (isPlaying) {
+                    pause() // 一旦止める
+                }
+                seekTo(0) // 最初に戻す
+                start()   // 再生
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    // 移動音開始
+    private fun startFlowSound() {
+        flowPlayer?.apply {
+            try {
+                if (isPlaying) {
+                    pause()
+                }
+                seekTo(0) // 毎回最初から再生させる
+                // 音量も確実に1.0に戻す
+                setVolume(1.0f, 1.0f)
+                start()
+            } catch (e: Exception) {
+                android.util.Log.e("GameViewModel", "Flow再生エラー: ${e.message}")
+            }
+        }
+    }
+
+    // 移動音停止
+    private fun stopFlowSound() {
+        if (flowPlayer?.isPlaying == true) {
+            flowPlayer?.pause()
+            flowPlayer?.seekTo(0)
+        }
+    }
+
+    // ゲームを完全にリセット（ホームに戻る時に呼ぶ）
+    fun resetGame() {
+        // 1. ラリーの計算（コルーチン）を即座にキャンセルする
+        gameJob?.cancel()
+        gameJob = null
+
+        // 2. 移動音 (flowPlayer) を確実に停止する
+        try {
+            flowPlayer?.let { player ->
+                if (player.isPlaying) {
+                    player.pause()
+                }
+                player.seekTo(0)
+                player.setVolume(0f, 0f)
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("GameViewModel", "Error stopping flowPlayer: ${e.message}")
+        }
+
+        // 3. 打撃音 (hitPlayer) も停止する
+        try {
+            hitPlayer?.let { player ->
+                if (player.isPlaying) {
+                    player.pause()
+                }
+                player.seekTo(0)
+                player.setVolume(0f, 0f)
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("GameViewModel", "Error stopping hitPlayer: ${e.message}")
+        }
+
+        // 4. フラグを折る
+        _uiState.update { it.copy(isRallyActive = false) }
+        isPlayerTurn = true
     }
 
     override fun onCleared() {
         super.onCleared()
+        resetGame()
         sensorManager?.unregisterListener(this)
+        hitPlayer?.release()
+        flowPlayer?.release()
+        hitPlayer = null
+        flowPlayer = null
     }
 
     // ゲーム開始
     fun startGame() {
-        gameJob?.cancel()
+        resetGame()
+        // 音量を元に戻す
+        flowPlayer?.setVolume(1.0f, 1.0f)
+        hitPlayer?.setVolume(1.0f, 1.0f)
         _uiState.value = GameUiState()
         isPlayerTurn = true
         spawnTarget(isPlayerSide = true)
@@ -69,13 +171,12 @@ class GameViewModel : ViewModel(), SensorEventListener {
         if (!isPlayerTurn || _uiState.value.isGameOver) return
 
         val currentTime = System.currentTimeMillis()
-        if (currentTime - lastShakeTime < 500) return // 連打防止
+        if (currentTime - lastShakeTime < 500) return
         lastShakeTime = currentTime
 
-        isPlayerTurn = false
-        startBallMovement(toEnemy = true)
+        playHitSound()
 
-        // プレイヤーが打った瞬間にラリー開始フラグを立てる
+        isPlayerTurn = false
         _uiState.update { it.copy(isRallyActive = true) }
         startBallMovement(toEnemy = true)
     }
@@ -94,52 +195,62 @@ class GameViewModel : ViewModel(), SensorEventListener {
     private fun startBallMovement(toEnemy: Boolean) {
         gameJob?.cancel()
         gameJob = viewModelScope.launch {
-            spawnTarget(isPlayerSide = !toEnemy)
-            val target = _uiState.value.targetPos ?: return@launch
+            try {
+                spawnTarget(isPlayerSide = !toEnemy)
+                val target = _uiState.value.targetPos ?: return@launch
 
-            val startBallPos = _uiState.value.ballPos
-            val startPlayerPos = _uiState.value.playerPos
-            val startEnemyPos = _uiState.value.enemyPos
+                val startBallPos = _uiState.value.ballPos
+                val startPlayerPos = _uiState.value.playerPos
+                val startEnemyPos = _uiState.value.enemyPos
 
-            // 2000ms (2秒) / 20ms間隔 = 100ステップ
-            val totalDuration = 2000L
-            val frameDelay = 20L
-            val steps = (totalDuration / frameDelay).toInt()
+                // --- 移動音を開始 ---
+                delay(10)
+                startFlowSound()
 
-            for (i in 1..steps) {
-                delay(frameDelay)
-                val progress = i.toFloat() / steps
+                val totalDuration = 2000L
+                val frameDelay = 20L
+                val steps = (totalDuration / frameDelay).toInt()
 
-                val currentBallX = startBallPos.x + (target.x - startBallPos.x) * progress
-                val currentBallY = startBallPos.y + (target.y - startBallPos.y) * progress
+                for (i in 1..steps) {
+                    delay(frameDelay)
+                    val progress = i.toFloat() / steps
 
-                val currentEnemyX = if (toEnemy) startEnemyPos.x + (target.x - startEnemyPos.x) * progress else startEnemyPos.x
-                val currentEnemyY = if (toEnemy) startEnemyPos.y + (target.y - startEnemyPos.y) * progress else startEnemyPos.y
+                    val currentBallX = startBallPos.x + (target.x - startBallPos.x) * progress
+                    val currentBallY = startBallPos.y + (target.y - startBallPos.y) * progress
 
-                val currentPlayerX = if (!toEnemy) startPlayerPos.x + (target.x - startPlayerPos.x) * progress else startPlayerPos.x
-                val currentPlayerY = if (!toEnemy) startPlayerPos.y + (target.y - startPlayerPos.y) * progress else startPlayerPos.y
+                    // キャラクターの移動計算（省略せずに記述）
+                    val currentEnemyX = if (toEnemy) startEnemyPos.x + (target.x - startEnemyPos.x) * progress else startEnemyPos.x
+                    val currentEnemyY = if (toEnemy) startEnemyPos.y + (target.y - startEnemyPos.y) * progress else startEnemyPos.y
+                    val currentPlayerX = if (!toEnemy) startPlayerPos.x + (target.x - startPlayerPos.x) * progress else startPlayerPos.x
+                    val currentPlayerY = if (!toEnemy) startPlayerPos.y + (target.y - startPlayerPos.y) * progress else startPlayerPos.y
 
-                _uiState.update {
-                    it.copy(
-                        ballPos = Position(currentBallX, currentBallY),
-                        enemyPos = Position(currentEnemyX, currentEnemyY),
-                        playerPos = Position(currentPlayerX, currentPlayerY)
-                    )
+                    _uiState.update {
+                        it.copy(
+                            ballPos = Position(currentBallX, currentBallY),
+                            enemyPos = Position(currentEnemyX, currentEnemyY),
+                            playerPos = Position(currentPlayerX, currentPlayerY)
+                        )
+                    }
                 }
-            }
 
-            if (toEnemy) {
-                delay(300) // Botの反応待ち
-                if (Random.nextFloat() < 0.90f) {
-                    startBallMovement(toEnemy = false)
+                stopFlowSound()
+
+                if (toEnemy) {
+                    delay(300) // 打ち返しまでの「間」
+                    if (Random.nextFloat() < 0.90f) {
+                        playHitSound() // 打撃音
+                        startBallMovement(toEnemy = false)
+                    } else {
+                        processScore(isPlayerWin = true)
+                    }
                 } else {
-                    processScore(isPlayerWin = true)
+                    isPlayerTurn = true
+                    delay(1000)
+                    if (isPlayerTurn) processScore(isPlayerWin = false)
                 }
-            } else {
-                isPlayerTurn = true
-                // プレイヤーの打ち返し待ち時間（1秒ほど猶予を持たせる）
-                delay(1000)
-                if (isPlayerTurn) processScore(isPlayerWin = false)
+            } finally {
+                // コルーチンがキャンセルされた場合（ラリー終了時など）も確実に音を止める
+                stopFlowSound()
             }
         }
     }

@@ -10,7 +10,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -23,15 +27,27 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             HagoitaandroidTheme {
-                // ViewModelのインスタンスをここで作成（または取得）
                 val gameViewModel: GameViewModel = viewModel()
 
-                // ★ ここにセンサーの初期化処理を追加 ★
+                // センサーと音声の初期化
                 val sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
-                gameViewModel.initSensor(sensorManager)
+                gameViewModel.initSystem(applicationContext, sensorManager)
+
+                // 画面が閉じられたり、アプリが裏に回った時に音を強制停止する
+                val lifecycleOwner = LocalLifecycleOwner.current
+                DisposableEffect(lifecycleOwner) {
+                    val observer = LifecycleEventObserver { _, event ->
+                        if (event == Lifecycle.Event.ON_PAUSE || event == Lifecycle.Event.ON_STOP) {
+                            gameViewModel.resetGame()
+                        }
+                    }
+                    lifecycleOwner.lifecycle.addObserver(observer)
+                    onDispose {
+                        lifecycleOwner.lifecycle.removeObserver(observer)
+                    }
+                }
 
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    // HagoitaAppにgameViewModelを渡す
                     HagoitaApp(
                         modifier = Modifier.padding(innerPadding),
                         gameViewModel = gameViewModel
@@ -45,7 +61,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun HagoitaApp(
     modifier: Modifier = Modifier,
-    gameViewModel: GameViewModel = viewModel() // 引数で受け取るように変更
+    gameViewModel: GameViewModel = viewModel()
 ) {
     val navController = rememberNavController()
 
@@ -55,6 +71,10 @@ fun HagoitaApp(
         modifier = modifier
     ) {
         composable("start") {
+            DisposableEffect(Unit) {
+                gameViewModel.resetGame()
+                onDispose {}
+            }
             HomeScreen(
                 onStartClick = {
                     gameViewModel.startGame()
@@ -66,6 +86,7 @@ fun HagoitaApp(
         composable("play") {
             GamePlayScreen(
                 onNavigateBack = {
+                    gameViewModel.resetGame()
                     navController.popBackStack("start", inclusive = false)
                 },
                 gameViewModel = gameViewModel
