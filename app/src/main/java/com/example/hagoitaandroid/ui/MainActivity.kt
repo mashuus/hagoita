@@ -1,5 +1,7 @@
 package com.example.hagoitaandroid.ui
 
+import android.content.Context
+import android.hardware.SensorManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -21,8 +23,19 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             HagoitaandroidTheme {
+                // ViewModelのインスタンスをここで作成（または取得）
+                val gameViewModel: GameViewModel = viewModel()
+
+                // ★ ここにセンサーの初期化処理を追加 ★
+                val sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
+                gameViewModel.initSensor(sensorManager)
+
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    HagoitaApp(modifier = Modifier.padding(innerPadding))
+                    // HagoitaAppにgameViewModelを渡す
+                    HagoitaApp(
+                        modifier = Modifier.padding(innerPadding),
+                        gameViewModel = gameViewModel
+                    )
                 }
             }
         }
@@ -30,14 +43,12 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun HagoitaApp(modifier: Modifier = Modifier) {
-    // NavController: 画面遷移を命令するコントローラー
+fun HagoitaApp(
+    modifier: Modifier = Modifier,
+    gameViewModel: GameViewModel = viewModel() // 引数で受け取るように変更
+) {
     val navController = rememberNavController()
 
-    // ViewModelのインスタンスをここで一度だけ作成し、各画面で共有する
-    val gameViewModel: GameViewModel = viewModel()
-
-    // NavHost: 現在表示すべき画面を描画する場所
     NavHost(
         navController = navController,
         startDestination = "start",
@@ -46,14 +57,19 @@ fun HagoitaApp(modifier: Modifier = Modifier) {
         composable("start") {
             HomeScreen(
                 onStartClick = {
+                    gameViewModel.startGame()
                     navController.navigate("play")
                 }
             )
         }
 
-
         composable("play") {
-            GamePlayScreen(gameViewModel = gameViewModel)
+            GamePlayScreen(
+                onNavigateBack = {
+                    navController.popBackStack("start", inclusive = false)
+                },
+                gameViewModel = gameViewModel
+            )
         }
     }
 }
