@@ -9,10 +9,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.*
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -22,29 +23,36 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.hagoitaandroid.R
 import com.example.hagoitaandroid.ui.theme.HagoitaandroidTheme
+import kotlin.random.Random
 
 // 和風カラー定義
-val ColorWashi = Color(0xFFFBFaf5) // 和紙っぽい白
-val ColorVermilion = Color(0xFFD3381C) // 朱色
-val ColorGold = Color(0xFFC5A059) // 金色
-val ColorBlackInk = Color(0xFF2B2B2B) // 墨色
-val ColorTatami = Color(0xFFE0DCB8) // 畳っぽい色（フィールド背景用）
+val ColorWashi = Color(0xFFFBFaf5)
+val ColorVermilion = Color(0xFFD3381C)
+val ColorGold = Color(0xFFC5A059)
+val ColorBlackInk = Color(0xFF2B2B2B)
+val ColorTatami = Color(0xFFE0DCB8)
 
 @Composable
 fun GamePlayScreen(
     modifier: Modifier = Modifier,
     gameViewModel: GameViewModel = viewModel()
 ) {
+    // インポートエラーを防ぐため collectAsState を明示的に使用
     val uiState by gameViewModel.uiState.collectAsState()
 
-    // 全体の背景（和紙のような質感やグラデーションをイメージ）
+    // 乱数座標を保持するState
+    var targetX by remember { mutableFloatStateOf(Random.nextFloat() * 0.6f + 0.2f) }
+    var targetY by remember { mutableFloatStateOf(Random.nextFloat() * 0.4f + 0.3f) }
+    var ballX by remember { mutableFloatStateOf(Random.nextFloat() * 0.6f + 0.2f) }
+    var ballY by remember { mutableFloatStateOf(Random.nextFloat() * 0.4f + 0.3f) }
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -61,45 +69,154 @@ fun GamePlayScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // 1. 相手のエリア（スコア表示）
             OpponentScoreArea(score = uiState.opponentScore)
 
-            // 2. ゲームフィールド（中央）
-            // 以前の比率ロジックを維持しつつ、見た目を豪華にする枠を追加
+            // フィールドコンテナ
             GameFieldContainer {
-                Image(
-                    painter = painterResource(id = R.drawable.field),
-                    contentDescription = "ゲームフィールド",
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.FillBounds
-                )
+                BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                    val w = maxWidth
+                    val h = maxHeight
+
+                    // 1. 背景フィールド画像
+                    Image(
+                        painter = painterResource(id = R.drawable.field),
+                        contentDescription = "ゲームフィールド",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.FillBounds
+                    )
+
+                    // 2. ターゲット
+                    TargetItem(x = targetX, y = targetY, containerWidth = w, containerHeight = h)
+
+                    // 3. ボール
+                    BallItem(x = ballX, y = ballY, containerWidth = w, containerHeight = h)
+
+                    // 4. 敵
+                    CharacterPawn(
+                        x = 0.5f,
+                        y = 0.25f,
+                        imageResId = R.drawable.ic_enemy_char,
+                        containerWidth = w,
+                        containerHeight = h,
+                        label = "敵"
+                    )
+
+                    // 5. 自分
+                    CharacterPawn(
+                        x = 0.5f,
+                        y = 0.75f,
+                        imageResId = R.drawable.ic_player_char,
+                        containerWidth = w,
+                        containerHeight = h,
+                        label = "自"
+                    )
+                }
             }
 
-            // 3. 自身のエリア（スコア表示）
             PlayerScoreArea(score = uiState.playerScore)
         }
 
-        // 4. デバッグ用コントロールパネル（画面下部に配置）
         DebugControlPanel(
             modifier = Modifier.align(Alignment.BottomCenter),
-            onPlayerScoreChange = { gameViewModel.updatePlayerScore(it) },
-            onOpponentScoreChange = { gameViewModel.updateOpponentScore(it) }
+            onPlayerScoreChange = {
+                gameViewModel.updatePlayerScore(it)
+                targetX = Random.nextFloat() * 0.6f + 0.2f
+                targetY = Random.nextFloat() * 0.4f + 0.3f
+            },
+            onOpponentScoreChange = {
+                gameViewModel.updateOpponentScore(it)
+                ballX = Random.nextFloat() * 0.6f + 0.2f
+                ballY = Random.nextFloat() * 0.4f + 0.3f
+            }
         )
     }
 }
 
-// ----------------------------------------------------------------
-// サブコンポーネント群
-// ----------------------------------------------------------------
+@Composable
+fun BallItem(x: Float, y: Float, containerWidth: Dp, containerHeight: Dp) {
+    val ballSize = 60.dp
+    Box(
+        modifier = Modifier
+            .size(ballSize)
+            .offset(
+                x = (containerWidth * x) - (ballSize / 2),
+                y = (containerHeight * y) - (ballSize / 2)
+            )
+            .background(Color.Black.copy(alpha = 0.4f), CircleShape)
+            .clip(CircleShape)
+    )
+}
+
+@Composable
+fun TargetItem(x: Float, y: Float, containerWidth: Dp, containerHeight: Dp) {
+    val targetSize = 140.dp
+    Box(
+        modifier = Modifier
+            .size(targetSize)
+            .offset(
+                x = (containerWidth * x) - (targetSize / 2),
+                y = (containerHeight * y) - (targetSize / 2)
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = Icons.Default.Star,
+            contentDescription = null,
+            tint = ColorGold.copy(alpha = 0.8f),
+            modifier = Modifier.fillMaxSize()
+        )
+        Box(
+            modifier = Modifier
+                .size(60.dp)
+                .background(Color.White, CircleShape)
+                .border(3.dp, ColorVermilion, CircleShape)
+        )
+    }
+}
+
+@Composable
+fun CharacterPawn(
+    x: Float, y: Float,
+    imageResId: Int,
+    containerWidth: Dp,
+    containerHeight: Dp,
+    label: String
+) {
+    val size = 50.dp
+    Box(
+        modifier = Modifier
+            .size(size)
+            .offset(
+                x = (containerWidth * x) - (size / 2),
+                y = (containerHeight * y) - (size / 2)
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Image(
+            painter = painterResource(id = imageResId),
+            contentDescription = label,
+            modifier = Modifier
+                .fillMaxSize()
+                .shadow(4.dp, CircleShape)
+                .clip(CircleShape)
+                .background(Color.White, CircleShape),
+            contentScale = ContentScale.Fit
+        )
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .background(ColorBlackInk, RoundedCornerShape(4.dp))
+                .padding(horizontal = 4.dp, vertical = 1.dp)
+        ) {
+            Text(text = label, color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+        }
+    }
+}
 
 @Composable
 fun OpponentScoreArea(score: Int) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(
-            text = "相手",
-            style = MaterialTheme.typography.titleMedium,
-            color = ColorBlackInk
-        )
+        Text(text = "相手", style = MaterialTheme.typography.titleMedium, color = ColorBlackInk)
         ScoreBoard(score = score, containerColor = ColorBlackInk, contentColor = ColorGold)
     }
 }
@@ -109,17 +226,12 @@ fun PlayerScoreArea(score: Int) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         ScoreBoard(score = score, containerColor = ColorVermilion, contentColor = Color.White)
         Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = "あなた",
-            style = MaterialTheme.typography.titleMedium,
-            color = ColorBlackInk
-        )
+        Text(text = "あなた", style = MaterialTheme.typography.titleMedium, color = ColorBlackInk)
     }
 }
 
 @Composable
 fun ScoreBoard(score: Int, containerColor: Color, contentColor: Color) {
-    // 点数を表示する「木札」や「円」のようなデザイン
     Surface(
         modifier = Modifier
             .size(80.dp)
@@ -129,12 +241,7 @@ fun ScoreBoard(score: Int, containerColor: Color, contentColor: Color) {
         border = androidx.compose.foundation.BorderStroke(2.dp, ColorGold)
     ) {
         Box(contentAlignment = Alignment.Center) {
-            Text(
-                text = score.toString(),
-                fontSize = 36.sp,
-                fontWeight = FontWeight.Bold,
-                color = contentColor
-            )
+            Text(text = score.toString(), fontSize = 36.sp, fontWeight = FontWeight.Bold, color = contentColor)
         }
     }
 }
@@ -143,31 +250,19 @@ fun ScoreBoard(score: Int, containerColor: Color, contentColor: Color) {
 fun ColumnScope.GameFieldContainer(
     content: @Composable () -> Unit
 ) {
-    // フィールドを囲む雅な枠
-    // weight(1f)を使って、上下のスコア表示以外の空間を埋める
     Box(
         modifier = Modifier
-            .weight(1f)
+            .weight(1f) // ここが正しく動作するようになります
             .padding(vertical = 16.dp)
-            .fillMaxWidth(0.9f) // 横幅の90%を使う
+            .fillMaxWidth(0.9f)
             .shadow(12.dp, RoundedCornerShape(8.dp))
-            .background(ColorTatami) // フィールド画像の背景漏れ防止
-            .border(4.dp, ColorVermilion, RoundedCornerShape(8.dp)) // 朱色の枠
-            .border(8.dp, ColorBlackInk, RoundedCornerShape(8.dp)) // 内側の黒枠
+            .background(ColorTatami)
+            .border(4.dp, ColorVermilion, RoundedCornerShape(8.dp))
+            .border(8.dp, ColorBlackInk, RoundedCornerShape(8.dp))
             .clip(RoundedCornerShape(8.dp)),
         contentAlignment = Alignment.Center
     ) {
-        // 元の画像のアスペクト比や配置を尊重したい場合はここにロジックを入れる
-        // 今回はコンテナいっぱいに広げる形にしています
         content()
-
-        // ネット（中央線）の装飾例（画像に線がない場合用、あるなら不要）
-        // Box(
-        //    modifier = Modifier
-        //        .fillMaxWidth()
-        //        .height(2.dp)
-        //        .background(Color.White.copy(alpha = 0.5f))
-        // )
     }
 }
 
@@ -177,7 +272,6 @@ fun DebugControlPanel(
     onPlayerScoreChange: (Int) -> Unit,
     onOpponentScoreChange: (Int) -> Unit
 ) {
-    // デバッグ用の操作パネル（少し透けさせる）
     Surface(
         modifier = modifier
             .fillMaxWidth()
@@ -192,7 +286,9 @@ fun DebugControlPanel(
             verticalAlignment = Alignment.CenterVertically
         ) {
             DebugCounter(label = "相手", onIncrement = { onOpponentScoreChange(1) }, onDecrement = { onOpponentScoreChange(-1) })
-            Divider(modifier = Modifier.height(40.dp).width(1.dp))
+            HorizontalDivider(modifier = Modifier
+                .height(40.dp)
+                .width(1.dp))
             DebugCounter(label = "自分", onIncrement = { onPlayerScoreChange(1) }, onDecrement = { onPlayerScoreChange(-1) })
         }
     }
@@ -207,12 +303,8 @@ fun DebugCounter(
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(text = "$label (Debug)", style = MaterialTheme.typography.labelSmall, fontSize = 10.sp)
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onDecrement) {
-                Icon(Icons.Default.Remove, contentDescription = "減らす")
-            }
-            IconButton(onClick = onIncrement) {
-                Icon(Icons.Default.Add, contentDescription = "増やす")
-            }
+            IconButton(onClick = onDecrement) { Icon(Icons.Default.Remove, contentDescription = "減らす") }
+            IconButton(onClick = onIncrement) { Icon(Icons.Default.Add, contentDescription = "増やす") }
         }
     }
 }
