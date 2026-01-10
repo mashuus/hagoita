@@ -43,21 +43,16 @@ fun HagoitaApp(modifier: Modifier = Modifier) {
         startDestination = "start",
         modifier = modifier
     ) {
-        // composable("ルート名") { 表示する画面のUI } という形で画面を定義する
         composable("start") {
-            // スタート画面を表示 (UIの定義はGameScreen.ktにある)
-            GameStartScreen(
-                // スタート画面がクリックされたら、以下の処理を実行する
+            HomeScreen(
                 onStartClick = {
-                    gameViewModel.startGame() // ViewModelのゲーム開始関数を呼ぶ
-                    navController.navigate("play") // "play"画面に遷移する
+                    navController.navigate("play")
                 }
             )
         }
 
+
         composable("play") {
-            // ゲームプレイ画面を表示 (UIの定義はGameScreen.ktにある)
-            // HagoitaAppで作成したViewModelを渡す
             GamePlayScreen(gameViewModel = gameViewModel)
         }
     }
