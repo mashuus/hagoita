@@ -1,0 +1,75 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="100dp"
+    android:height="100dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+
+    <!-- 角 (金/黄色) -->
+    <path
+        android:fillColor="#FDD835"
+        android:pathData="M30,30 L20,5 L40,25 z M70,30 L80,5 L60,25 z"/>
+
+    <!-- 顔のベース (少し暗めの赤) -->
+    <path
+        android:fillColor="#D32F2F"
+        android:pathData="M50,20 C30,20 15,35 15,60 C15,85 30,95 50,95 C70,95 85,85 85,60 C85,35 70,20 50,20 z"/>
+
+    <!-- 髪の毛 (黒/墨色) -->
+    <path
+        android:fillColor="#212121"
+        android:pathData="M15,60 C15,35 25,20 50,20 C75,20 85,35 85,60 C85,40 75,15 50,15 C25,15 15,40 15,60 z"/>
+
+    <!-- 目 (吊り目・黄色) -->
+    <path
+        android:fillColor="#FFEB3B"
+        android:pathData="M25,45 L45,50 L25,55 z M75,45 L55,50 L75,55 z"/>
+
+    <!-- 瞳 -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="M35,50m-2,0a2,2 0,1 1,4 0a2,2 0,1 1,-4 0
+                          M65,50m-2,0a2,2 0,1 1,4 0a2,2 0,1 1,-4 0"/>
+
+    <!-- 口 -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="M35,70 Q50,85 65,70 L60,70 L58,75 L55,70 L45,70 L42,75 L40,70 z"/>
+
+    <!-- 牙 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M40,70 L42,76 L44,70 z M56,70 L58,76 L60,70 z"/>
+
+    <!-- ===================== -->
+    <!-- 負け：墨の落書き -->
+    <!-- ===================== -->
+
+    <!-- 墨ひげ -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="M30,65 C35,67 40,67 45,65
+                          M55,65 C60,67 65,67 70,65"/>
+
+    <!-- ほっぺ渦 -->
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#000000"
+        android:strokeWidth="2"
+        android:pathData="M30,60 C28,58 30,55 33,56
+                          C36,57 34,61 31,60"/>
+
+    <!-- 額に「負」 -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="M47,30 L53,30 L53,32 L47,32 z
+                          M50,32 L50,42
+                          M45,38 L55,38
+                          M46,42 L54,42"/>
+
+    <!-- 目に× -->
+    <path
+        android:strokeColor="#000000"
+        android:strokeWidth="2"
+        android:pathData="M28,45 L42,55 M42,45 L28,55
+                          M58,45 L72,55 M72,45 L58,55"/>
+</vector>

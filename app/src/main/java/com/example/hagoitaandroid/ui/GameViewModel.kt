@@ -211,7 +211,8 @@ class GameViewModel : ViewModel(), SensorEventListener {
                 delay(10)
                 startFlowSound()
 
-                val totalDuration = 2000L
+                // 難易度が「神」（botAccuracy >= 0.99f）の場合は 1秒、それ以外は 2秒で到達
+                val totalDuration = if (botAccuracy >= 0.99f) 800L else 2000L
                 val frameDelay = 20L
                 val steps = (totalDuration / frameDelay).toInt()
 
@@ -249,7 +250,9 @@ class GameViewModel : ViewModel(), SensorEventListener {
                     }
                 } else {
                     isPlayerTurn = true
-                    delay(1000)
+                    // プレイヤー側の待ち時間を難易度に応じて短縮（神なら300ms、それ以外は1000ms）
+                    val playerDelay = if (botAccuracy >= 0.99f) 200L else 1000L
+                    delay(playerDelay)
                     if (isPlayerTurn) processScore(isPlayerWin = false)
                 }
             } finally {
