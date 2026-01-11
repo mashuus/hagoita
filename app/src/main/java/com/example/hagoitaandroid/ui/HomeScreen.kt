@@ -2,6 +2,7 @@ package com.example.hagoitaandroid.ui
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -14,6 +15,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -87,29 +90,42 @@ fun HomeScreen(
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = 32.dp)
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                    .padding(horizontal = 16.dp, vertical = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text("難易度を選択してください", modifier = Modifier.align(Alignment.CenterHorizontally), fontWeight = FontWeight.Bold)
-
-                DifficultyButton("簡単 ", 0.5f, Color.Green) { accuracy ->
+                // ラベル
+                androidx.compose.foundation.layout.Box(
+                    modifier = Modifier
+                        .background(
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                            shape = RoundedCornerShape(10.dp)
+                        )
+                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                ) {
+                Text(
+                    text = "難易度を選択してください",
+                    color = MaterialTheme.colorScheme.onBackground,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+                DifficultyButton("簡単 ", 0.5f, Color.Green.copy(alpha = 0.5f)) { accuracy ->
                     gameViewModel.setDifficulty(accuracy)
                     gameViewModel.resetGame()
                     onStartClick()
                 }
-                DifficultyButton("普通 ", 0.7f, Color.Blue) { accuracy ->
+                DifficultyButton("普通 ", 0.7f, Color.Blue.copy(alpha = 0.5f)) { accuracy ->
                     gameViewModel.setDifficulty(accuracy)
                     gameViewModel.resetGame()
                     onStartClick()
                 }
-                DifficultyButton("難しい ", 0.9f, Color.Magenta) { accuracy ->
+                DifficultyButton("難しい ", 0.9f, Color.Magenta.copy(alpha = 0.5f)) { accuracy ->
                     gameViewModel.setDifficulty(accuracy)
                     gameViewModel.resetGame()
                     onStartClick()
                 }
-                DifficultyButton("神 ", 0.99f, Color.Red) { accuracy ->
+                DifficultyButton("神 ", 0.99f, Color.Red.copy(alpha = 0.5f)) { accuracy ->
                     gameViewModel.setDifficulty(accuracy)
                     gameViewModel.resetGame()
                     onStartClick()
@@ -133,4 +149,5 @@ fun DifficultyButton(label: String, accuracy: Float, color: Color, onClick: (Flo
         Text(label, color = Color.White)
     }
 }
+
 
