@@ -1,38 +1,44 @@
-# 羽子板アプリ (Hagoita)
+# 羽子板アプリ (Hagoita Android)
 
-音と振りで遊ぶ対戦型スマホゲーム。画面ではなく「音のタイミング」に合わせて端末を振るアクション性を重視しています。
+スマートフォンの加速度センサーを活用した、体感型の対戦羽子板ゲームです。
+画面上のボタンではなく、実際に端末を振るアクションと音の連動により、伝統的な羽子板のラリーを再現しています。
 
-## 概要
-- 落下音に合わせて端末を振ると打撃音でラリーを継続。タイミングを外すとゲームオーバー。
-- 終了時にラリーの精度（スイングのタイミング偏差）を表示。
+## 🎮 ゲーム概要
+- **体感スイング**: 加速度センサーにより、端末をサッと振ることでボールを打ち返します。
+- **白熱のラリー**: 敵ボットとリアルタイムでラリーを行い、ミスを誘い合います。
+- **7点先取ルール**: 相手より先に7得点した方が勝利となります。
+- **難易度選択**: 「簡単(50%)」「普通(70%)」「難しい(90%)」「神(99%)」の4段階から選択可能。高難易度では弾速とボットの返球精度が向上します。
 
-## 主要機能
-- 低遅延再生: SoundPool を使用した効果音
-- 加速度検出: SensorManager (加速度センサー) による振動判定
-- Jetpack Compose によるシンプルな UI
-- MVVM 構成でセンサーとゲームロジックを分離
+## ✨ 主要機能
+- **高精度センサー判定**: 閾値制御と連打防止ロジックを備えた `SensorManager` によるスイング検出。
+- **ハイブリッド・オーディオ**:
+    - **SoundPool**: 打撃音（hit.mp3）の低遅延・即時再生。
+    - **MediaPlayer**: ボールの移動音（flow.mp3）のループ再生。
+- **和風モダンなUI**:
+    - 朱色や和紙、畳をイメージした伝統的なカラーデザイン。
+    - 筆文字風の「一本！」演出アニメーション。
+    - 勝敗に応じたランダムキャラクター画像の表示。
+- **ライフサイクル最適化**: Huawei端末などのジェスチャーナビゲーションに対応。画面遷移やアプリ中断時に音源とコルーチンを確実に解放し、誤作動を防止。
 
-## 技術スタック
-- Kotlin 1.9+
-- Jetpack Compose (Material3)
-- SoundPool, SensorManager
-- Gradle (Wrapper) — Windows: gradlew.bat
+## 🛠 技術スタック
+- **Language**: Kotlin
+- **UI**: Jetpack Compose (Material3)
+- **Architecture**: MVVM (ViewModel, StateFlow)
+- **Concurrency**: Kotlin Coroutines (Structured Concurrencyによるラリー制御)
+- **Hardware**: SensorManager (Accelerometer)
+- **Audio**: SoundPool & MediaPlayer
+- **Navigation**: Jetpack Navigation Compose
 
-## ディレクトリ例（実装予定 / 参照）
-- app/src/main/java/com/example/hagoita/
-  - ui/
-    - MainActivity.kt 
-    - HomeScreen.kt (UI: スタート画面)
-    - GameScreen.kt (UI: スタート / リザルト)
-    - GameViewModel.kt (ゲームロジック・状態)
-    - theme/
-     - Color.kt
-     - Theme.kt
-     - Type.kt
-  - sensor/
-    - ShakeDetector.kt (閾値判定)
-  - audio/
-    - SoundManager.kt (SoundPool 管理)
-  - model/
-    - GameResult.kt (スコア・タイミング情報)
-    - GameState.kt (ゲーム状態)
+## 📂 プロジェクト構造
+- `ui/`
+    - `MainActivity.kt`: アプリの土台。センサー初期化とナビゲーション（画面遷移）を管理。
+    - `HomeScreen.kt`: スタート画面と難易度選択。画面表示時のリセット処理を実装。
+    - `GameScreen.kt`: ゲームプレイ画面。`BoxWithConstraints` によるレスポンシブな座標配置。
+    - `GameViewModel.kt`: ラリーのメインループ、スコア計算、座標計算、サウンド制御を担当。
+- `res/`
+    - `drawable/`: フィールド画像、ベクター形式のキャラクター（鬼・だるま等）。
+    - `raw/`: 音声リソース（hit.mp3, flow.mp3）。
+
+## 🚀 開発のポイント
+- **座標の正規化**: フィールドを 0.0 〜 1.0 の相対座標で管理。あらゆる画面サイズの端末で同様のプレイ体験を提供。
+- **シングルループ・ロジック**: 再帰呼び出しを排除し、単一のコルーチンループでラリーを管理することで、音響の競合とリソースの二重消費を解決。
