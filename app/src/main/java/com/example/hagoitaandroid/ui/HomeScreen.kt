@@ -79,7 +79,7 @@ fun HomeScreen(
                 onClick = { showDifficultySelect = true }, // 押すと難易度選択へ
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = 32.dp)
+                    .padding(bottom = 70.dp)
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
             ) {
@@ -99,7 +99,7 @@ fun HomeScreen(
                 androidx.compose.foundation.layout.Box(
                     modifier = Modifier
                         .background(
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                            color = Color.White.copy(alpha = 0.7f),
                             shape = RoundedCornerShape(10.dp)
                         )
                         .padding(horizontal = 12.dp, vertical = 8.dp)
