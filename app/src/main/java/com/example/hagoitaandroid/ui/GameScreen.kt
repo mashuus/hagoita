@@ -26,6 +26,10 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.foundation.layout.offset
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.hagoitaandroid.R
 import com.example.hagoitaandroid.ui.theme.HagoitaandroidTheme
@@ -80,7 +84,6 @@ fun GamePlayScreen(
                 effectColor = Color.Gray      // 哀愁のグレー
                 showScoreEffect = true
             }
-
             if (showScoreEffect) {
                 kotlinx.coroutines.delay(1200) // 1.2秒間表示
                 showScoreEffect = false
@@ -91,17 +94,78 @@ fun GamePlayScreen(
         prevOpponentScore = uiState.opponentScore
     }
 
-    if (uiState.isGameOver) {
-        // 勝利ダイアログ
-        AlertDialog(
-            onDismissRequest = { },
-            title = { Text("試合終了") },
-            text = { Text(uiState.winnerLabel) },
-            confirmButton = {
-                Button(onClick = onNavigateBack) { Text("ホームへ戻る") }
+        val overlayRes = remember { mutableStateOf<Int?>(null) }
+
+        LaunchedEffect(uiState.isGameOver, uiState.winnerLabel) {
+            if (uiState.isGameOver) {
+                // winnerIsPlayer が null の場合は文字列をフォールバックで使う
+                overlayRes.value = when {
+                    //uiState.winnerIsPlayer == true -> listOf(R.drawable.oni, R.drawable.makeoni).random()
+                    //uiState.winnerIsPlayer == false -> listOf(R.drawable.daruma, R.drawable.makedaruma).random()
+                    uiState.winnerLabel == "あなたの勝ち！" -> listOf(R.drawable.oni, R.drawable.makeoni).random()
+                    uiState.winnerLabel == "相手の勝ち..." -> listOf(R.drawable.daruma, R.drawable.makedaruma).random()
+                    else -> null
+                }
+            } else {
+                overlayRes.value = null
             }
-        )
-    }
+        }
+
+        if (uiState.isGameOver) {
+            // ダイアログをカスタムで描画して画像を上に重ねる
+            Dialog(
+                onDismissRequest = { /* 閉じない */ },
+                properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    // 上に表示するランダム画像
+                    overlayRes.value?.let { resId ->
+                        Image(
+                            painter = painterResource(id = resId),
+                            contentDescription = null,
+                            modifier = Modifier
+                                .size(220.dp)
+                                .align(Alignment.TopCenter)
+                                .offset(y = 24.dp),
+                            contentScale = ContentScale.Fit
+                        )
+                    }
+
+                    // ダイアログ本体（画像の下に表示）
+                    Card(
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .fillMaxWidth(0.9f),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(text = "試合終了", style = MaterialTheme.typography.titleLarge)
+                            Spacer(modifier = Modifier.height(15.dp))
+                            Text(text = uiState.winnerLabel)
+                            Spacer(modifier = Modifier.height(15.dp))
+                            Box(
+                                modifier = Modifier.fillMaxWidth(),
+                                contentAlignment = Alignment.CenterEnd
+                            ) {
+                                Button(onClick = onNavigateBack) {
+                                    Text("ホームへ戻る")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
     // 背景レイアウト
     Box(
