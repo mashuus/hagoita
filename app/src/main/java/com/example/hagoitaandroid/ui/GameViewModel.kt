@@ -5,7 +5,9 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.media.AudioAttributes
 import android.media.MediaPlayer
+import android.media.SoundPool
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.hagoitaandroid.R
@@ -15,6 +17,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.math.sqrt
 import kotlin.random.Random
@@ -40,101 +43,73 @@ class GameViewModel : ViewModel(), SensorEventListener {
     private val _uiState = MutableStateFlow(GameUiState())
     val uiState: StateFlow<GameUiState> = _uiState.asStateFlow()
 
-    // Botの返球成功率 (デフォルトは0.7f)
     private var botAccuracy: Float = 0.7f
-
-    // 難易度を設定する関数
-    fun setDifficulty(accuracy: Float) {
-        this.botAccuracy = accuracy
-    }
+    fun setDifficulty(accuracy: Float) { this.botAccuracy = accuracy }
 
     private var gameJob: Job? = null
     private var isPlayerTurn = true
 
-    // --- センサー用設定 ---
+    // --- センサー・サウンド用 ---
     private var sensorManager: SensorManager? = null
-    private val SHAKE_THRESHOLD = 15.0f // スイング判定の閾値（適宜調整）
+    private val SHAKE_THRESHOLD = 15.0f
     private var lastShakeTime: Long = 0
 
-    // --- 音声用プロパティ ---
-    private var hitPlayer: MediaPlayer? = null
     private var flowPlayer: MediaPlayer? = null
+    private var soundPool: SoundPool? = null
+    private var hitSoundId: Int = 0
 
-    // センサーと音声を初期化
     fun initSystem(context: Context, manager: SensorManager) {
-        // センサー初期化
         sensorManager = manager
         val accelerometer = manager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
         manager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_GAME)
 
-        // 音声初期化 (重複作成防止のため、一旦releaseしてから作成)
-        hitPlayer?.release()
+        val audioAttributes = AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_GAME)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .build()
+        soundPool = SoundPool.Builder()
+            .setMaxStreams(5)
+            .setAudioAttributes(audioAttributes)
+            .build()
+        hitSoundId = soundPool?.load(context, R.raw.hit, 1) ?: 0
+
         flowPlayer?.release()
-        hitPlayer = MediaPlayer.create(context, R.raw.hit)
         flowPlayer = MediaPlayer.create(context, R.raw.flow).apply {
-            isLooping = true // 移動音はループ再生
+            isLooping = true
         }
     }
 
-    // ヒット音再生
     private fun playHitSound() {
-        hitPlayer?.apply {
-            try {
-                if (isPlaying) {
-                    pause() // 一旦止める
-                }
-                seekTo(0) // 最初に戻す
-                start()   // 再生
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
+        soundPool?.play(hitSoundId, 1.0f, 1.0f, 1, 0, 1.0f)
     }
 
-    // 移動音開始
     private fun startFlowSound() {
         flowPlayer?.apply {
             try {
-                if (isPlaying) {
-                    pause()
-                }
-                seekTo(0) // 毎回最初から再生させる
-                // 音量も確実に1.0に戻す
+                if (isPlaying) pause()
+                seekTo(0)
                 setVolume(1.0f, 1.0f)
                 start()
-            } catch (e: Exception) {
-                android.util.Log.e("GameViewModel", "Flow再生エラー: ${e.message}")
-            }
+            } catch (e: Exception) { e.printStackTrace() }
         }
     }
 
-    // 移動音停止
     private fun stopFlowSound() {
-        if (flowPlayer?.isPlaying == true) {
-            flowPlayer?.pause()
-            flowPlayer?.seekTo(0)
-        }
+        try {
+            if (flowPlayer?.isPlaying == true) {
+                flowPlayer?.pause()
+                flowPlayer?.seekTo(0)
+            }
+        } catch (e: Exception) { e.printStackTrace() }
     }
 
-    // ゲームを完全にリセット（ホームに戻る時に呼ぶ）
     fun resetGame() {
-        // ラリーの計算（コルーチン）を即座にキャンセルする
         gameJob?.cancel()
         gameJob = null
-
-        try {
-            hitPlayer?.pause()
-            hitPlayer?.seekTo(0)
-        } catch (e: Exception) {}
-
-        // フラグを折る
-        isPlayerTurn = false // ホーム画面ではターンという概念を消す
+        stopFlowSound()
+        isPlayerTurn = false
         _uiState.update {
-            it.copy(
-                isRallyActive = false,
-                targetPos = null,
-                ballPos = Position(0.5f, 0.75f)
-            )
+            it.copy(isRallyActive = false, targetPos = null, ballPos = Position(0.5f, 0.75f))
         }
     }
 
@@ -142,131 +117,131 @@ class GameViewModel : ViewModel(), SensorEventListener {
         super.onCleared()
         resetGame()
         sensorManager?.unregisterListener(this)
-        hitPlayer?.release()
         flowPlayer?.release()
-        hitPlayer = null
-        flowPlayer = null
+        soundPool?.release()
     }
 
-    // ゲーム開始
     fun startGame() {
         resetGame()
-        // 音量を元に戻す
-        flowPlayer?.setVolume(1.0f, 1.0f)
-        hitPlayer?.setVolume(1.0f, 1.0f)
         _uiState.value = GameUiState()
         isPlayerTurn = true
         spawnTarget(isPlayerSide = true)
     }
 
-    // プレイヤーのアクション（ボタンまたはセンサーから呼ばれる）
     fun onPlayerAction() {
-        // 基本的なガード：ゲームオーバー、または自分のターンでないなら無視
+        // ラリー中でない、または相手のターンの時は無視
         if (_uiState.value.isGameOver || !isPlayerTurn) return
 
-        // targetPos が null、かつラリーもアクティブでない場合は「ホーム画面」とみなして即座に終了
+        // ホーム画面等での誤作動防止
         val currentState = _uiState.value
-        if (currentState.targetPos == null && !currentState.isRallyActive) {
-            stopFlowSound()
-            return
-        }
+        if (currentState.targetPos == null && !currentState.isRallyActive) return
 
-        // 連打防止（0.5秒以内の連続振りを無視）
         val currentTime = System.currentTimeMillis()
         if (currentTime - lastShakeTime < 500) return
         lastShakeTime = currentTime
 
-        // ここで音を鳴らす
+        // 自分が打つ音を鳴らす
         playHitSound()
-
-        // 状態更新
         isPlayerTurn = false
         _uiState.update { it.copy(isRallyActive = true) }
-        startBallMovement(toEnemy = true)
-    }
 
-    private fun spawnTarget(isPlayerSide: Boolean) {
-        val nextY = if (isPlayerSide) {
-            Random.nextFloat() * 0.15f + 0.7f
-        } else {
-            Random.nextFloat() * 0.15f + 0.15f
+        // ラリーのループを開始（まだ動いていない場合のみ）
+        if (gameJob == null || gameJob?.isCompleted == true) {
+            runRallyLoop()
         }
-        val nextX = Random.nextFloat() * 0.6f + 0.2f
-        _uiState.update { it.copy(targetPos = Position(nextX, nextY)) }
     }
 
-    // ボールの移動アニメーション（2秒かけて到達するように調整）
-    private fun startBallMovement(toEnemy: Boolean) {
+    private fun runRallyLoop() {
         gameJob?.cancel()
         gameJob = viewModelScope.launch {
             try {
-                spawnTarget(isPlayerSide = !toEnemy)
-                val target = _uiState.value.targetPos ?: return@launch
+                var currentToEnemy = true // 最初はプレイヤーから敵へ飛ばす
 
-                val startBallPos = _uiState.value.ballPos
-                val startPlayerPos = _uiState.value.playerPos
-                val startEnemyPos = _uiState.value.enemyPos
+                while (isActive) {
+                    // 1. ターゲット（着弾地点）の決定
+                    spawnTarget(isPlayerSide = !currentToEnemy)
+                    val target = _uiState.value.targetPos ?: break
+                    val startBallPos = _uiState.value.ballPos
+                    val startPlayerPos = _uiState.value.playerPos
+                    val startEnemyPos = _uiState.value.enemyPos
 
-                // --- 移動音を開始 ---
-                delay(10)
-                startFlowSound()
+                    // 2. 移動音開始
+                    startFlowSound()
 
-                // 難易度が「神」（botAccuracy >= 0.99f）の場合は 1秒、それ以外は 2秒で到達
-                val totalDuration = if (botAccuracy >= 0.99f) 800L else 2000L
-                val frameDelay = 20L
-                val steps = (totalDuration / frameDelay).toInt()
+                    // 神難易度なら速くする
+                    val totalDuration = if (botAccuracy >= 0.99f) 800L else 2000L
+                    val steps = (totalDuration / 20L).toInt()
 
-                for (i in 1..steps) {
-                    delay(frameDelay)
-                    val progress = i.toFloat() / steps
+                    for (i in 1..steps) {
+                        delay(20L)
+                        val progress = i.toFloat() / steps
 
-                    val currentBallX = startBallPos.x + (target.x - startBallPos.x) * progress
-                    val currentBallY = startBallPos.y + (target.y - startBallPos.y) * progress
+                        // 各種座標の更新
+                        val currentBallX = startBallPos.x + (target.x - startBallPos.x) * progress
+                        val currentBallY = startBallPos.y + (target.y - startBallPos.y) * progress
+                        val currentEnemyX = if (currentToEnemy) startEnemyPos.x + (target.x - startEnemyPos.x) * progress else startEnemyPos.x
+                        val currentEnemyY = if (currentToEnemy) startEnemyPos.y + (target.y - startEnemyPos.y) * progress else startEnemyPos.y
+                        val currentPlayerX = if (!currentToEnemy) startPlayerPos.x + (target.x - startPlayerPos.x) * progress else startPlayerPos.x
+                        val currentPlayerY = if (!currentToEnemy) startPlayerPos.y + (target.y - startPlayerPos.y) * progress else startPlayerPos.y
 
-                    // キャラクターの移動計算（省略せずに記述）
-                    val currentEnemyX = if (toEnemy) startEnemyPos.x + (target.x - startEnemyPos.x) * progress else startEnemyPos.x
-                    val currentEnemyY = if (toEnemy) startEnemyPos.y + (target.y - startEnemyPos.y) * progress else startEnemyPos.y
-                    val currentPlayerX = if (!toEnemy) startPlayerPos.x + (target.x - startPlayerPos.x) * progress else startPlayerPos.x
-                    val currentPlayerY = if (!toEnemy) startPlayerPos.y + (target.y - startPlayerPos.y) * progress else startPlayerPos.y
-
-                    _uiState.update {
-                        it.copy(
-                            ballPos = Position(currentBallX, currentBallY),
-                            enemyPos = Position(currentEnemyX, currentEnemyY),
-                            playerPos = Position(currentPlayerX, currentPlayerY)
-                        )
+                        _uiState.update {
+                            it.copy(
+                                ballPos = Position(currentBallX, currentBallY),
+                                enemyPos = Position(currentEnemyX, currentEnemyY),
+                                playerPos = Position(currentPlayerX, currentPlayerY)
+                            )
+                        }
                     }
-                }
 
-                stopFlowSound()
+                    // 3. 到着したので音を止める
+                    stopFlowSound()
 
-                if (toEnemy) {
-                    delay(300) // 打ち返しまでの「間」
-                    if (Random.nextFloat() < botAccuracy) {
-                        playHitSound() // 打撃音
-                        startBallMovement(toEnemy = false)
+                    if (currentToEnemy) {
+                        // --- 敵の陣地に到着 ---
+                        delay(300)
+                        if (Random.nextFloat() < botAccuracy) {
+                            playHitSound() // 敵が打ち返す音
+                            currentToEnemy = false // 次はプレイヤーへ
+                        } else {
+                            processScore(isPlayerWin = true) // 敵のミス
+                            break
+                        }
                     } else {
-                        processScore(isPlayerWin = true)
+                        // --- 自分の陣地に到着 ---
+                        isPlayerTurn = true
+                        val playerDelay = if (botAccuracy >= 0.99f) 300L else 1000L
+
+                        // プレイヤーが振るのを待つ
+                        val waitStartTime = System.currentTimeMillis()
+                        while (isPlayerTurn && System.currentTimeMillis() - waitStartTime < playerDelay) {
+                            delay(10)
+                        }
+
+                        if (isPlayerTurn) {
+                            processScore(isPlayerWin = false) // プレイヤーのミス
+                            break
+                        } else {
+                            // 成功時、onPlayerAction経由で playHitSound が鳴り、isPlayerTurnがfalseになっている
+                            currentToEnemy = true
+                        }
                     }
-                } else {
-                    isPlayerTurn = true
-                    // プレイヤー側の待ち時間を難易度に応じて短縮（神なら300ms、それ以外は1000ms）
-                    val playerDelay = if (botAccuracy >= 0.99f) 200L else 1000L
-                    delay(playerDelay)
-                    if (isPlayerTurn) processScore(isPlayerWin = false)
                 }
             } finally {
-                // コルーチンがキャンセルされた場合（ラリー終了時など）も確実に音を止める
                 stopFlowSound()
             }
         }
+    }
+
+    private fun spawnTarget(isPlayerSide: Boolean) {
+        val nextY = if (isPlayerSide) Random.nextFloat() * 0.15f + 0.7f else Random.nextFloat() * 0.15f + 0.15f
+        val nextX = Random.nextFloat() * 0.6f + 0.2f
+        _uiState.update { it.copy(targetPos = Position(nextX, nextY)) }
     }
 
     private fun processScore(isPlayerWin: Boolean) {
         _uiState.update {
             val newPlayerScore = if (isPlayerWin) it.playerScore + 1 else it.playerScore
             val newOpponentScore = if (!isPlayerWin) it.opponentScore + 1 else it.opponentScore
-
             val gameOver = newPlayerScore >= winScore || newOpponentScore >= winScore
             it.copy(
                 playerScore = newPlayerScore,
@@ -278,24 +253,18 @@ class GameViewModel : ViewModel(), SensorEventListener {
                 isRallyActive = false
             )
         }
-
         if (!_uiState.value.isGameOver) {
             isPlayerTurn = true
             spawnTarget(isPlayerSide = true)
         }
     }
 
-    // --- センサーイベントの処理 ---
     override fun onSensorChanged(event: SensorEvent?) {
         if (event?.sensor?.type == Sensor.TYPE_ACCELEROMETER) {
             val x = event.values[0]
             val y = event.values[1]
             val z = event.values[2]
-
-            // 加速度の大きさを計算
             val acceleration = sqrt(x * x + y * y + z * z)
-
-            // 閾値を超えたら「振った」とみなす
             if (acceleration > SHAKE_THRESHOLD) {
                 onPlayerAction()
             }
